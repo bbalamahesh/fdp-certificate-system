@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveToGoogleSheets, initializeSheet } from '@/lib/googleSheets';
-import { generateCertificate } from '@/lib/pdfGenerator';
-import { sendCertificateEmail } from '@/lib/emailService';
+import { saveToGoogleSheets, initializeSheet } from '../../../lib/googleSheets';
+import { generateCertificate } from '../../../lib/pdfGenerator';
+import { sendCertificateEmail } from '../../../lib/emailService';
 export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   try {
