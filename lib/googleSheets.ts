@@ -1,14 +1,14 @@
-import { google } from 'googleapis';
+import { google } from "googleapis";
 
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  },
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+export async function POST(req: Request) {
+  const auth = new google.auth.JWT(
+    process.env.GOOGLE_CLIENT_EMAIL,
+    undefined,
+    process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    ["https://www.googleapis.com/auth/spreadsheets"]
+  );
 
-const sheets = google.sheets({ version: 'v4', auth });
+  const sheets = google.sheets({ version: "v4", auth });
 
 export async function saveToGoogleSheets(data: {
   title: string;
