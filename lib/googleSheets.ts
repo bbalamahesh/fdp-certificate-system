@@ -1,14 +1,13 @@
-import { google } from "googleapis";
+import { google } from 'googleapis';
 
-export async function POST(req: Request) {
-  const auth = new google.auth.JWT(
-    process.env.GOOGLE_CLIENT_EMAIL,
-    undefined,
-    process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    ["https://www.googleapis.com/auth/spreadsheets"]
-  );
+const auth = new google.auth.JWT(
+  process.env.GOOGLE_CLIENT_EMAIL,
+  undefined,
+  process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  ['https://www.googleapis.com/auth/spreadsheets']
+);
 
-  const sheets = google.sheets({ version: "v4", auth });
+const sheets = google.sheets({ version: 'v4', auth });
 
 export async function saveToGoogleSheets(data: {
   title: string;
@@ -19,47 +18,40 @@ export async function saveToGoogleSheets(data: {
 }) {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-  try {
-    // Prepare the row data
-    const values = [
-      [
-        new Date().toISOString(),
-        data.title,
-        data.name,
-        data.email,
-        data.phone,
-        data.organization,
-      ],
-    ];
-
-    // Append data to the sheet
-    const response = await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: 'Sheet1!A:F', // Adjust range as needed
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values,
-      },
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Error saving to Google Sheets:', error);
-    throw error;
+  if (!spreadsheetId) {
+    throw new Error('GOOGLE_SHEET_ID is missing');
   }
+
+  const values = [[
+    new Date().toISOString(),
+    data.title,
+    data.name,
+    data.email,
+    data.phone,
+    data.organization,
+  ]];
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: 'Sheet1!A:F',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values },
+  });
 }
 
 export async function initializeSheet() {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
+  if (!spreadsheetId) {
+    throw new Error('GOOGLE_SHEET_ID is missing');
+  }
+
   try {
-    // Check if headers exist
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Sheet1!A1:F1',
     });
 
-    // If no headers, add them
     if (!response.data.values || response.data.values.length === 0) {
       await sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -70,8 +62,7 @@ export async function initializeSheet() {
         },
       });
     }
-  } catch (error) {
-    console.error('Error initializing sheet:', error);
-    // If sheet doesn't exist, this will fail, but that's okay
+  } catch (err) {
+    console.error('Sheet init error:', err);
   }
 }
