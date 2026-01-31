@@ -1,62 +1,57 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { saveToGoogleSheets, initializeSheet } from '../../../lib/googleSheets';
-import { generateCertificate } from '../../../lib/pdfGenerator';
-import { sendCertificateEmail } from '../../../lib/emailService';
-export const runtime = 'nodejs';
-export async function POST(request: NextRequest) {
+import { NextResponse } from 'next/server'
+import { registrationSchema } from '@/components/registration/schema'
+import addRegistrationToSheet from '@/lib/googleSheets'
+import { generateCertificate } from '@/lib/pdfGenerator-dynamic'
+import { sendCertificateEmail } from '@/lib/emailService'
+import { getCertificateSettings } from '@/lib/certificateSettings'
+
+const settings = await getCertificateSettings()
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { title, name, email, phone, organization } = body;
+    // 1️⃣ Parse request body
+    const body = await req.json()
 
-    // Validate required fields
-    if (!title || !name || !email || !phone || !organization) {
+    // 2️⃣ Validate using Zod
+    const parsed = registrationSchema.safeParse(body)
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'All fields are required' },
+        {
+          type: 'validation',
+          errors: parsed.error.flatten().fieldErrors,
+        },
         { status: 400 }
-      );
+      )
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
+    const data = parsed.data
 
-    // Step 1: Save to Google Sheets
-    console.log('Saving to Google Sheets...');
-    await initializeSheet();
-    await saveToGoogleSheets({ title, name, email, phone, organization });
-    console.log('Data saved to Google Sheets');
+    // 3️⃣ Save to Google Sheets
+    await addRegistrationToSheet(data)
 
-    // Step 2: Generate PDF Certificate
-    console.log('Generating certificate...');
-    const certificatePdf = await generateCertificate({ title, name });
-    console.log('Certificate generated');
+    // 4️⃣ Generate certificate PDF
+const pdfBuffer = await generateCertificate(data)
 
-    // Step 3: Send email with certificate
-    console.log('Sending email...');
-    await sendCertificateEmail(email, name, certificatePdf);
-    console.log('Email sent successfully');
+// 5️⃣ Send email (non-blocking)
+try {
+await sendCertificateEmail({
+  recipientEmail: data.email,
+  recipientName: data.name,
+  certificatePdf: pdfBuffer,
+  settings,
+})
+} catch (err) {
+  console.error('Email failed:', err)
+}
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Registration successful! Certificate sent to your email.',
-      },
-      { status: 200 }
-    );
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Registration error:', error);
-    
+    console.error('Registration error:', error)
+
     return NextResponse.json(
-      {
-        error: 'Failed to process registration. Please try again later.',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { message: 'Internal server error. Please try again later.' },
       { status: 500 }
-    );
+    )
   }
 }

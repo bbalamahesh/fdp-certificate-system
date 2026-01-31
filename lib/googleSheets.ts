@@ -8,7 +8,7 @@ const auth = new google.auth.JWT({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-export async function saveToGoogleSheets(data: {
+export default async function addRegistrationToSheet(data: {
   title: string;
   name: string;
   email: string;
