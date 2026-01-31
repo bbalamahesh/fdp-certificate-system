@@ -48,7 +48,7 @@ export default function RegistrationCard({
       <CardHeader className="text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl text-white">
         <CardTitle className="text-3xl font-bold">FDP Registration</CardTitle>
         <CardDescription className="text-blue-100">
-          Mastering Data Analysis Using R Studio
+          - Mastering Data Analysis Using R Studio - 
         </CardDescription>
         <p className="text-sm text-blue-100">
           25-03-2025 & 26-03-2025
