@@ -10,19 +10,23 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-type SendCertificateEmailInput = {
+export type SendCertificateEmailInput = {
   recipientEmail: string
   recipientName: string
   certificatePdf: Buffer
   settings: CertificateSettings
 }
 
-export async function sendCertificateEmail({
-  recipientEmail,
-  recipientName,
-  certificatePdf,
-  settings,
-}: SendCertificateEmailInput) {
+export async function sendCertificateEmail(
+  input: SendCertificateEmailInput
+) {
+  const {
+    recipientEmail,
+    recipientName,
+    certificatePdf,
+    settings,
+  } = input
+
   const html = buildCertificateEmailTemplate({
     recipientName,
     settings,

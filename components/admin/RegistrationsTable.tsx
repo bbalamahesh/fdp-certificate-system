@@ -1,9 +1,17 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, Search, Download, Mail } from 'lucide-react';
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Loader2,
+  Search,
+  Mail,
+  Trash2,
+  RefreshCcw,
+  Copy,
+} from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -11,188 +19,270 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@/components/ui/table'
 
 interface Registration {
-  id: number;
-  timestamp: string;
-  title: string;
-  name: string;
-  email: string;
-  phone: string;
-  organization: string;
+  id: number
+  timestamp: string
+  title: string
+  name: string
+  email: string
+  phone: string
+  organization: string
+  certificate_id: string
 }
 
+const PAGE_SIZE = 10
+
 export default function RegistrationsTable() {
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [filteredData, setFilteredData] = useState<Registration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [registrations, setRegistrations] = useState<Registration[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
 
-  useEffect(() => {
-    loadRegistrations();
-  }, []);
+  // selection
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
 
+  // pagination
+  const [page, setPage] = useState(1)
+
+  /* -------------------- DATA -------------------- */
   useEffect(() => {
-    // Filter data based on search term
-    const filtered = registrations.filter(
-      (reg) =>
-        reg.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.organization.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredData(filtered);
-  }, [searchTerm, registrations]);
+    loadRegistrations()
+  }, [])
 
   const loadRegistrations = async () => {
     try {
-      const response = await fetch('/api/admin/registrations');
-      const data = await response.json();
+      const res = await fetch('/api/admin/registrations')
+      const data = await res.json()
       if (data.success) {
-        setRegistrations(data.registrations);
-        setFilteredData(data.registrations);
+        setRegistrations(data.registrations)
       }
-    } catch (error) {
-      console.error('Failed to load registrations:', error);
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const exportToCSV = () => {
-    const headers = ['Timestamp', 'Title', 'Name', 'Email', 'Phone', 'Organization'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredData.map((reg) =>
-        [
-          reg.timestamp,
-          reg.title,
-          reg.name,
-          reg.email,
-          reg.phone,
-          reg.organization,
-        ].join(',')
-      ),
-    ].join('\n');
+  /* -------------------- FILTER + PAGINATION -------------------- */
+  const filteredData = registrations.filter(
+    (r) =>
+      r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.certificate_id.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fdp-registrations-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-  };
+  const totalPages = Math.ceil(filteredData.length / PAGE_SIZE)
 
-  const formatDate = (timestamp: string) => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch {
-      return timestamp;
-    }
-  };
+  const paginatedData = filteredData.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  )
 
+  /* -------------------- SELECTION -------------------- */
+  const toggleRow = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    const pageIds = paginatedData.map((r) => r.id)
+    const allSelected = pageIds.every((id) => selectedIds.includes(id))
+
+    setSelectedIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !pageIds.includes(id))
+        : [...prev, ...pageIds.filter((id) => !prev.includes(id))]
+    )
+  }
+
+  const selectedRegistrations = registrations.filter((r) =>
+    selectedIds.includes(r.id)
+  )
+
+  /* -------------------- ACTIONS -------------------- */
+  const resend = async (email: string) => {
+    await fetch('/api/admin/resend-certificate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  const remove = async (email: string) => {
+    await fetch('/api/admin/delete-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    loadRegistrations()
+  }
+
+  const bulkResend = async () => {
+    for (const r of selectedRegistrations) await resend(r.email)
+    setSelectedIds([])
+  }
+
+  const bulkDelete = async () => {
+    for (const r of selectedRegistrations) await remove(r.email)
+    setSelectedIds([])
+  }
+
+  const copyToClipboard = async (value: string) => {
+    await navigator.clipboard.writeText(value)
+  }
+
+  /* -------------------- UI -------------------- */
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
-    );
+    )
   }
 
   return (
     <div className="space-y-4">
-      {/* Header with Search and Export */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+      {/* Search + actions */}
+      <div className="flex flex-col sm:flex-row gap-3 justify-between">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
           <Input
-            placeholder="Search by name, email, or organization..."
+            className="pl-9"
+            placeholder="Search name, email, or certificate ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
+
         <div className="flex gap-2">
-          <Button onClick={exportToCSV} variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
-          <Button onClick={loadRegistrations} variant="outline">
-            <svg
-              className="mr-2 h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
+          <Button variant="outline" onClick={loadRegistrations}>
+            <RefreshCcw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+          <Button variant="outline" onClick={() => setSelectedIds([])}>
+            Deselect All
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-600 font-medium">Total Registrations</p>
-          <p className="text-2xl font-bold text-blue-900">{registrations.length}</p>
+      {/* Bulk bar */}
+      {selectedIds.length > 0 && (
+        <div className="flex gap-3 items-center p-3 border rounded-md bg-muted">
+          <span className="text-sm font-medium">
+            {selectedIds.length} selected
+          </span>
+          <Button variant="outline" onClick={bulkResend}>
+            Bulk Resend
+          </Button>
+          <Button variant="destructive" onClick={bulkDelete}>
+            Bulk Delete
+          </Button>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm text-green-600 font-medium">Showing</p>
-          <p className="text-2xl font-bold text-green-900">{filteredData.length}</p>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <p className="text-sm text-purple-600 font-medium">Latest Registration</p>
-          <p className="text-sm font-medium text-purple-900">
-            {registrations[0]?.name || 'No registrations yet'}
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">#</TableHead>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Organization</TableHead>
+      <div className="border rounded-md overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={
+                    paginatedData.length > 0 &&
+                    paginatedData.every((r) =>
+                      selectedIds.includes(r.id)
+                    )
+                  }
+                  onCheckedChange={toggleSelectAll}
+                />
+              </TableHead>
+              <TableHead>#</TableHead>
+              <TableHead>Timestamp</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Certificate ID</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {paginatedData.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedIds.includes(r.id)}
+                    onCheckedChange={() => toggleRow(r.id)}
+                  />
+                </TableCell>
+                <TableCell>{r.id}</TableCell>
+                <TableCell>{r.timestamp}</TableCell>
+                <TableCell>{r.name}</TableCell>
+                <TableCell>{r.email}</TableCell>
+
+                {/* Certificate ID */}
+                <TableCell className="font-mono text-xs flex items-center gap-2">
+                  {r.certificate_id}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(r.certificate_id)}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </TableCell>
+
+                <TableCell className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => resend(r.email)}
+                  >
+                    <Mail className="h-3 w-3 mr-1" />
+                    Resend
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => remove(r.email)}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No registrations found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredData.map((reg) => (
-                  <TableRow key={reg.id}>
-                    <TableCell className="font-medium">{reg.id}</TableCell>
-                    <TableCell className="text-sm">{formatDate(reg.timestamp)}</TableCell>
-                    <TableCell>{reg.title}</TableCell>
-                    <TableCell className="font-medium">{reg.name}</TableCell>
-                    <TableCell>{reg.email}</TableCell>
-                    <TableCell>{reg.phone}</TableCell>
-                    <TableCell>{reg.organization}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex justify-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page === 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
+          Prev
+        </Button>
+
+        <span className="text-sm px-2">
+          Page {page} of {totalPages}
+        </span>
+
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page === totalPages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </Button>
       </div>
     </div>
-  );
+  )
 }
