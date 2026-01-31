@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { toast } from 'sonner'
+
 import {
   Loader2,
   Search,
@@ -11,6 +13,8 @@ import {
   Trash2,
   RefreshCcw,
   Copy,
+  Pencil,
+  Save,
 } from 'lucide-react'
 import {
   Table,
@@ -29,7 +33,7 @@ interface Registration {
   email: string
   phone: string
   organization: string
-  certificate_id: string
+  certificateId: string
 }
 
 const PAGE_SIZE = 10
@@ -45,6 +49,16 @@ export default function RegistrationsTable() {
   // pagination
   const [page, setPage] = useState(1)
 
+  // edit
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editValues, setEditValues] = useState<Partial<Registration>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // 🔥 MUST BE HERE
+  const [saving, setSaving] = useState(false)
+  const [originalRow, setOriginalRow] =
+    useState<Registration | null>(null)
+
   /* -------------------- DATA -------------------- */
   useEffect(() => {
     loadRegistrations()
@@ -53,6 +67,9 @@ export default function RegistrationsTable() {
   const loadRegistrations = async () => {
     try {
       const res = await fetch('/api/admin/registrations')
+      if (!res.ok) {
+        throw new Error('Update failed')
+      }
       const data = await res.json()
       if (data.success) {
         setRegistrations(data.registrations)
@@ -63,12 +80,11 @@ export default function RegistrationsTable() {
   }
 
   /* -------------------- FILTER + PAGINATION -------------------- */
-  const filteredData = registrations.filter(
-    (r) =>
-      r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.certificate_id.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredData = registrations.filter((r) =>
+    [r.name, r.email, r.organization, r.certificateId]
+      .join(' ')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
   )
 
   const totalPages = Math.ceil(filteredData.length / PAGE_SIZE)
@@ -99,6 +115,90 @@ export default function RegistrationsTable() {
   const selectedRegistrations = registrations.filter((r) =>
     selectedIds.includes(r.id)
   )
+
+  /* -------------------- EDIT -------------------- */
+  const startEdit = (row: Registration) => {
+    setEditingId(row.id)
+    setEditValues(row)
+    setOriginalRow(row)
+    setErrors({})
+  }
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!editValues.name?.trim()) {
+      newErrors.name = 'Name is required'
+    }
+
+    if (
+      !editValues.email ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editValues.email)
+    ) {
+      newErrors.email = 'Invalid email'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const saveEdit = async () => {
+    if (!validate() || editingId === null || !originalRow) return
+
+    setSaving(true)
+
+    // Optimistic update
+    setRegistrations((prev) =>
+      prev.map((r) =>
+        r.id === editingId
+          ? { ...r, ...(editValues as Registration) }
+          : r
+      )
+    )
+
+    try {
+      const res = await fetch('/api/admin/update-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editValues),
+      })
+
+      const text = await res.text()
+      console.log('UPDATE RESPONSE:', res.status, text)
+
+      if (!res.ok) {
+        throw new Error(text || 'Update failed')
+      }
+
+      toast.success('Changes saved')
+
+      setEditingId(null)
+      setEditValues({})
+      setErrors({})
+      setOriginalRow(null)
+
+      loadRegistrations()
+    } catch (error) {
+      console.error('SAVE ERROR:', error)
+
+      // Rollback
+      setRegistrations((prev) =>
+        prev.map((r) =>
+          r.id === originalRow.id ? originalRow : r
+        )
+      )
+
+      toast.error('Your changes were not saved. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditValues({})
+    setErrors({})
+  }
 
   /* -------------------- ACTIONS -------------------- */
   const resend = async (email: string) => {
@@ -169,20 +269,26 @@ export default function RegistrationsTable() {
         </div>
       </div>
 
-      {/* Bulk bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex gap-3 items-center p-3 border rounded-md bg-muted">
-          <span className="text-sm font-medium">
-            {selectedIds.length} selected
-          </span>
-          <Button variant="outline" onClick={bulkResend}>
-            Bulk Resend
-          </Button>
-          <Button variant="destructive" onClick={bulkDelete}>
-            Bulk Delete
-          </Button>
-        </div>
-      )}
+      {/* Bulk bar – always visible */}
+      <div className="flex gap-3 items-center p-3 border rounded-md bg-muted">
+        <span className="text-sm font-medium">
+          {selectedIds.length} selected
+        </span>
+        <Button
+          variant="outline"
+          disabled={selectedIds.length === 0 || editingId !== null}
+          onClick={bulkResend}
+        >
+          Bulk Send
+        </Button>
+        <Button
+          variant="destructive"
+          disabled={selectedIds.length === 0 || editingId !== null}
+          onClick={bulkDelete}
+        >
+          Bulk Delete
+        </Button>
+      </div>
 
       {/* Table */}
       <div className="border rounded-md overflow-hidden">
@@ -205,6 +311,7 @@ export default function RegistrationsTable() {
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Certificate ID</TableHead>
+              <TableHead>Edit</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -216,42 +323,142 @@ export default function RegistrationsTable() {
                   <Checkbox
                     checked={selectedIds.includes(r.id)}
                     onCheckedChange={() => toggleRow(r.id)}
+                    disabled={editingId !== null || saving}
                   />
                 </TableCell>
+
                 <TableCell>{r.id}</TableCell>
                 <TableCell>{r.timestamp}</TableCell>
-                <TableCell>{r.name}</TableCell>
-                <TableCell>{r.email}</TableCell>
 
-                {/* Certificate ID */}
-                <TableCell className="font-mono text-xs flex items-center gap-2">
-                  {r.certificate_id}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(r.certificate_id)}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
+                {/* Name */}
+                <TableCell>
+                  {editingId === r.id ? (
+                    <>
+                      <Input
+                        value={editValues.name || ''}
+                        onChange={(e) =>
+                          setEditValues((v) => ({
+                            ...v,
+                            name: e.target.value,
+                          }))
+                        }
+                      />
+                      {errors.name && (
+                        <p className="text-xs text-destructive">
+                          {errors.name}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    r.name
+                  )}
                 </TableCell>
 
-                <TableCell className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => resend(r.email)}
-                  >
-                    <Mail className="h-3 w-3 mr-1" />
-                    Resend
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => remove(r.email)}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Delete
-                  </Button>
+                {/* Email */}
+                <TableCell>
+                  {editingId === r.id ? (
+                    <>
+                      <Input
+                        value={editValues.email || ''}
+                        onChange={(e) =>
+                          setEditValues((v) => ({
+                            ...v,
+                            email: e.target.value,
+                          }))
+                        }
+                      />
+                      {errors.email && (
+                        <p className="text-xs text-destructive">
+                          {errors.email}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    r.email
+                  )}
+                </TableCell>
+
+                {/* Certificate ID */}
+                <TableCell className="font-mono text-xs align-middle">
+                  <div className="flex items-center gap-2 min-h-[28px]">
+                    {r.certificateId ? (
+                      <>
+                        <span>{r.certificateId}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            copyToClipboard(r.certificateId)
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground italic">
+                        —
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+
+                {/* Edit */}
+                <TableCell className="align-middle">
+                  {editingId === r.id ? (
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={saveEdit} disabled={saving}>
+                        {saving ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Save className="h-3 w-3 mr-1" />
+                        )}
+                        Save
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelEdit}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={editingId !== null || saving}
+                      onClick={() => startEdit(r)}
+                    >
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )}
+                </TableCell>
+
+                {/* Actions */}
+                <TableCell className="align-middle">
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={editingId !== null || saving}
+                      onClick={() => resend(r.email)}
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      Resend
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={editingId !== null || saving}
+                      onClick={() => remove(r.email)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -260,7 +467,7 @@ export default function RegistrationsTable() {
       </div>
 
       {/* Pagination */}
-      <div className="flex justify-center gap-2">
+      <div className="flex justify-end gap-2">
         <Button
           size="sm"
           variant="outline"
@@ -270,7 +477,7 @@ export default function RegistrationsTable() {
           Prev
         </Button>
 
-        <span className="text-sm px-2">
+        <span className="text-sm px-2 flex items-center">
           Page {page} of {totalPages}
         </span>
 

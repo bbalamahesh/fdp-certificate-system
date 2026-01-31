@@ -17,7 +17,7 @@ export async function GET() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Sheet1!A:F',
+      range: 'Sheet1!A:G', // 👈 include Certificate ID
     });
 
     const rows = response.data.values;
@@ -26,7 +26,6 @@ export async function GET() {
       return NextResponse.json({ success: true, registrations: [] });
     }
 
-    // Skip header row and format data
     const registrations = rows.slice(1).map((row, index) => ({
       id: index + 1,
       timestamp: row[0] || '',
@@ -35,6 +34,7 @@ export async function GET() {
       email: row[3] || '',
       phone: row[4] || '',
       organization: row[5] || '',
+      certificateId: row[6] || '', // ✅ added
     }));
 
     return NextResponse.json({ success: true, registrations });
