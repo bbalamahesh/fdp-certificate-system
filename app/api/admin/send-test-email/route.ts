@@ -1,35 +1,33 @@
 import { NextResponse } from 'next/server'
-import { getCertificateSettings } from '@/lib/certificateSettings'
-import { generateCertificate } from '@/lib/pdfGenerator-dynamic'
-import { sendCertificateEmail } from '@/lib/emailService'
+import { generateFinalCertificate } from '@/lib/certificates/generateFinalCertificate'
+import { sendCertificateEmail } from '@/lib/email/sendCertificateEmail'
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const settings = await getCertificateSettings()
+    const { email, name, certificateId } = await req.json()
 
-    const dummyUser = {
-      name: 'Test Participant',
-      email: process.env.GMAIL_USER!, // 👈 admin Gmail only
-    }
+    const eventId = 'default-event'
 
-    const pdfBuffer = await generateCertificate({
-        name: dummyUser.name,
-        ...settings,
-        title: ''
+    const { pdfBuffer, content } = await generateFinalCertificate({
+      recipientName: name,
+      certificateId,
+      issuedAt: new Date().toLocaleDateString(),
+      eventId: 'default-event',
     })
 
     await sendCertificateEmail({
-      recipientEmail: dummyUser.email,
-      recipientName: dummyUser.name,
-      certificatePdf: pdfBuffer,
-      settings,
+      to: email,
+      recipientName: name,
+      programName: content.programName,
+      institution: content.institution,
+      pdfBuffer,
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Test email failed:', error)
+    console.error('TEST EMAIL ERROR:', error)
     return NextResponse.json(
-      { message: 'Failed to send test email' },
+      { error: 'Failed to send test email' },
       { status: 500 }
     )
   }

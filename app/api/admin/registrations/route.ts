@@ -28,14 +28,15 @@ export async function GET() {
 
     const registrations = rows.slice(1).map((row, index) => ({
       id: index + 1,
+      sheetRow: index + 2, // 👈 REQUIRED
       timestamp: row[0] || '',
       title: row[1] || '',
       name: row[2] || '',
       email: row[3] || '',
       phone: row[4] || '',
       organization: row[5] || '',
-      certificateId: row[6] || '', // ✅ added
-    }));
+      certificateId: row[6] || '',
+    }))
 
     return NextResponse.json({ success: true, registrations });
   } catch (error) {

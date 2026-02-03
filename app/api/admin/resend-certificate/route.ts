@@ -1,54 +1,34 @@
 import { NextResponse } from 'next/server'
-import { getCertificateSettings } from '@/lib/certificateSettings'
-import { generateCertificate } from '@/lib/pdfGenerator-dynamic'
-import { sendCertificateEmail } from '@/lib/emailService'
-import { getRegistrationByEmail } from '@/lib/googleSheets'
+import { generateFinalCertificate } from '@/lib/certificates/generateFinalCertificate'
+import { sendCertificateEmail } from '@/lib/email/sendCertificateEmail' // existing
 
 export async function POST(req: Request) {
     try {
-        const { email } = await req.json()
+        const { email, name, certificateId } = await req.json()
 
-        if (!email) {
-            return NextResponse.json(
-                { message: 'Email is required' },
-                { status: 400 }
-            )
-        }
+        // TEMP: single event assumption
+        const eventId = 'default-event'
 
-        // 1️⃣ Fetch participant from Google Sheets
-        const registration = await getRegistrationByEmail(email)
-
-        if (!registration) {
-            return NextResponse.json(
-                { message: 'Registration not found' },
-                { status: 404 }
-            )
-        }
-
-        // 2️⃣ Load latest settings
-        const settings = await getCertificateSettings()
-
-        // 3️⃣ Generate certificate again
-        const pdfBuffer = await generateCertificate({
-            name: registration.name,
-            ...settings,
-            title: '',
-            certificate_id: ''
+        const { pdfBuffer, content } = await generateFinalCertificate({
+            recipientName: name,
+            certificateId,
+            issuedAt: new Date().toLocaleDateString(),
+            eventId: 'default-event',
         })
 
-        // 4️⃣ Resend email
         await sendCertificateEmail({
-            recipientEmail: registration.email,
-            recipientName: registration.name,
-            certificatePdf: pdfBuffer,
-            settings,
+            to: email,
+            recipientName: name,
+            programName: content.programName,
+            institution: content.institution,
+            pdfBuffer,
         })
 
         return NextResponse.json({ success: true })
     } catch (error) {
-        console.error('Resend failed:', error)
+        console.error('RESEND CERT ERROR:', error)
         return NextResponse.json(
-            { message: 'Failed to resend certificate' },
+            { error: 'Failed to resend certificate' },
             { status: 500 }
         )
     }

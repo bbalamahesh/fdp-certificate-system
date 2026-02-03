@@ -17,7 +17,8 @@ const sheets: sheets_v4.Sheets = google.sheets({
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { sheetRow, name, email } = body
+        console.log('UPDATE PAYLOAD:', body)
+        const { sheetRow, title, name, email, phone, organization } = body
 
         if (!sheetRow) {
             return NextResponse.json(
@@ -30,10 +31,10 @@ export async function POST(req: Request) {
 
         await sheets.spreadsheets.values.update({
             spreadsheetId,
-            range: `Sheet1!C${sheetRow}:D${sheetRow}`,
+            range: `Sheet1!B${sheetRow}:F${sheetRow}`,
             valueInputOption: 'RAW',
             requestBody: {
-                values: [[name, email]],
+                values: [[title, name, email, phone, organization]],
             },
         })
 

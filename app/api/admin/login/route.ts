@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
     // Get credentials from environment variables
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin'; // Change this!
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin@123'; // Change this!
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
 
     // Validate credentials
