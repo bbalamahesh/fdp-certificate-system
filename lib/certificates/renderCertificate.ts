@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit'
+import path from 'path'
 import type { CertificateContent } from './types'
 
 export interface CertificateConfig {
@@ -24,46 +25,60 @@ export function renderCertificate({
     layout,
     content,
 }: RenderArgs) {
+    const fontsDir = path.join(process.cwd(), 'public/fonts')
+
+    // ✅ IMPORTANT: provide font at construction time
     const doc = new PDFDocument({
-        size: layout.orientation === 'landscape' ? 'A4' : 'A4',
+        size: 'A4',
         layout: layout.orientation,
         margin: 50,
+        font: path.join(fontsDir, 'Roboto-Regular.ttf'),
     })
+
+    /* -------------------- FONTS -------------------- */
+    doc.registerFont('regular', path.join(fontsDir, 'Roboto-Regular.ttf'))
+    doc.registerFont('bold', path.join(fontsDir, 'Roboto-Bold.ttf'))
+    doc.registerFont('italic', path.join(fontsDir, 'Roboto-Italic.ttf'))
+
+    // 🚨 MUST set default font immediately
+    doc.font('regular')
 
     /* -------------------- HEADER -------------------- */
     doc
+        .font('bold')
         .fontSize(26)
-        .font('Times-Bold')
         .text(layout.title, { align: 'center' })
         .moveDown(1)
 
     doc
+        .font('italic')
         .fontSize(16)
-        .font('Times-Italic')
         .text(`(${layout.eventType})`, { align: 'center' })
         .moveDown(2)
 
     /* -------------------- BODY -------------------- */
-    doc.fontSize(14).font('Times-Roman')
-
-    doc.text(
-        `This is to certify that ${recipientName} has successfully participated in the program titled`,
-        { align: 'center' }
-    )
+    doc
+        .font('regular')
+        .fontSize(14)
+        .text(
+            `This is to certify that ${recipientName} has successfully participated in the program titled`,
+            { align: 'center' }
+        )
 
     doc
         .moveDown(0.8)
-        .font('Times-Bold')
+        .font('bold')
         .fontSize(16)
         .text(content.programName, { align: 'center' })
         .moveDown(1)
 
-    doc.font('Times-Roman').fontSize(14)
-
-    doc.text(
-        `conducted by the ${content.department}, ${content.faculty}, ${content.institution}`,
-        { align: 'center' }
-    )
+    doc
+        .font('regular')
+        .fontSize(14)
+        .text(
+            `conducted by the ${content.department}, ${content.faculty}, ${content.institution}`,
+            { align: 'center' }
+        )
 
     doc
         .moveDown(0.5)
@@ -75,18 +90,28 @@ export function renderCertificate({
     /* -------------------- FOOTER -------------------- */
     doc.moveDown(3)
 
-    doc.text(`Issued on: ${issuedAt}`, { align: 'left' })
-    doc.text(`Certificate ID: ${certificateId}`, { align: 'right' })
+    doc
+        .font('regular')
+        .fontSize(10)
+        .text(`Issued on: ${issuedAt}`, { align: 'left' })
+
+    doc
+        .font('regular')
+        .fontSize(10)
+        .text(`Certificate ID: ${certificateId}`, { align: 'right' })
 
     /* -------------------- SIGNATURES -------------------- */
     if (layout.signatureCount > 0) {
         doc.moveDown(3)
-        doc.text(
-            layout.signatureCount === 2
-                ? 'Coordinator Head of Department'
-                : 'Coordinator',
-            { align: 'center' }
-        )
+        doc
+            .font('bold')
+            .fontSize(12)
+            .text(
+                layout.signatureCount === 2
+                    ? 'Coordinator • Head of Department'
+                    : 'Coordinator',
+                { align: 'center' }
+            )
     }
 
     return doc
