@@ -2,11 +2,13 @@ import nodemailer from 'nodemailer'
 import { CertificateSettings } from '@/lib/certificateSettings'
 import { buildCertificateEmailTemplate } from './emailTemplates/certificateEmail'
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
+export const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
   auth: {
-    user: process.env.GMAIL_USER!,
-    pass: process.env.GMAIL_APP_PASSWORD!,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
 })
 

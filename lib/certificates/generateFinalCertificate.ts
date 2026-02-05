@@ -30,12 +30,13 @@ export async function generateFinalCertificate({
         content,
     })
 
-    const chunks: Buffer[] = []
-
     const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = []
+
         doc.on('data', (chunk) => chunks.push(chunk))
         doc.on('end', () => resolve(Buffer.concat(chunks)))
         doc.on('error', reject)
+
         doc.end()
     })
 

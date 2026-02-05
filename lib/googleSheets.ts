@@ -17,7 +17,7 @@ const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID!
  * Rename your Google Sheet tab to: "Registrations"
  */
 const SHEET_NAME = 'Registrations'
-const RANGE = `${SHEET_NAME}!A:G`
+const RANGE = `${SHEET_NAME}!A:Z`
 
 /* -------------------- ADD REGISTRATION -------------------- */
 export default async function addRegistrationToSheet(data: {
@@ -104,25 +104,42 @@ export async function getRegistrationByEmail(email: string) {
 
 /* -------------------- GET ALL REGISTRATIONS (ADMIN TABLE) -------------------- */
 export async function getAllRegistrations() {
+  console.log('👉 getAllRegistrations CALLED')
+
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: RANGE,
   })
 
-  const rows = res.data.values || []
-  const [, ...dataRows] = rows
+  const rows = res.data.values
+  console.log('👉 RAW ROWS COUNT:', rows?.length)
+  console.log('👉 HEADERS:', rows?.[0])
+  console.log('👉 FIRST DATA ROW:', rows?.[1])
 
-  return dataRows.map((row, index) => ({
+  if (!rows || rows.length < 2) return []
+
+  const headers = rows[0]
+  const idx = (name: string) => headers.indexOf(name)
+
+  const mapped = rows.slice(1).map((row, index) => ({
     id: index + 1,
-    timestamp: row[0],
-    title: row[1],
-    name: row[2],
-    email: row[3],
-    phone: row[4],
-    organization: row[5],
-    certificate_id: row[6],
+    timestamp: row[idx('Timestamp')] ?? '',
+    title: row[idx('Title')] ?? '',
+    name: row[idx('Name')] ?? '',
+    email: row[idx('Email')] ?? '',
+    phone: row[idx('Phone')] ?? '',
+    organization: row[idx('Organization')] ?? '',
+    certificate_id: row[idx('Certificate ID')] ?? '',
+    certificate_issued_at: row[idx('certificateIssuedAt')] ?? '',
   }))
+
+  console.log('👉 MAPPED COUNT:', mapped.length)
+  console.log('👉 FIRST MAPPED ROW:', mapped[0])
+
+  return mapped
 }
+
+
 
 /* -------------------- DELETE REGISTRATION BY EMAIL -------------------- */
 export async function deleteRegistrationByEmail(email: string) {
@@ -158,3 +175,37 @@ export async function deleteRegistrationByEmail(email: string) {
     },
   })
 }
+
+
+export async function getRegistrationByCertificateId(certificateId: string) {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID!,
+    range: 'Registrations!A:Z',
+  })
+
+  const rows = res.data.values
+  if (!rows || rows.length < 2) return null
+
+  const headers = rows[0].map((h) => h.trim().toLowerCase())
+
+  const idx = (name: string) => headers.indexOf(name)
+
+  const certIndex = idx('certificate_id')
+  if (certIndex === -1) return null
+
+  const match = rows.slice(1).find(
+    (row) => row[certIndex]?.trim() === certificateId.trim()
+  )
+
+  if (!match) return null
+
+  return {
+    name: match[idx('name')] || '',
+    title: match[idx('title')] || '',
+    email: match[idx('email')] || '',
+    organization: match[idx('organization')] || '',
+    certificate_id: match[certIndex],
+    issued_at: match[idx('certificate_issued_at')] || '',
+  }
+}
+

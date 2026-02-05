@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 
 import RegistrationCard from './RegistrationCard'
 import { registrationSchema, RegistrationSchema } from './schema'
+import { toast } from 'sonner'
 
 type MessageState = {
   type: 'success' | 'error' | ''
@@ -76,6 +77,11 @@ export default function RegistrationForm() {
           type: 'error',
           text: data?.message || 'This email is already registered.',
         })
+        return
+      }
+
+      if (res.status === 409) {
+        toast.error('Certificate already issued')
         return
       }
 
