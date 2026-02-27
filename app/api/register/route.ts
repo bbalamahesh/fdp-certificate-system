@@ -5,6 +5,7 @@ import { generateCertificate } from '@/lib/pdfGenerator-dynamic'
 import { sendCertificateEmail } from '@/lib/emailService'
 import { getCertificateSettings } from '@/lib/certificateSettings'
 import { generateCertificateId } from '@/lib/utils'
+import crypto from 'crypto'
 
 export async function POST(req: Request) {
   try {
@@ -27,6 +28,9 @@ export async function POST(req: Request) {
 
     // 3️⃣ Generate certificate ID
     const certificateId = generateCertificateId()
+    const verificationCode = crypto.randomUUID()
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin
+    const verificationUrl = `${baseUrl}/verify/${verificationCode}`
 
     // 4️⃣ Load settings ONCE
     const settings = await getCertificateSettings()
@@ -35,6 +39,9 @@ export async function POST(req: Request) {
     await addRegistrationToSheet({
       ...data,
       certificate_id: certificateId,
+      verification_code: verificationCode,
+      verification_url: verificationUrl,
+      certificate_status: 'ACTIVE',
     })
 
     // 6️⃣ Generate PDF

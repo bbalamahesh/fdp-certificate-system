@@ -1,65 +1,85 @@
 import { google } from 'googleapis'
+import type { CertificateContent } from './types'
 
-export interface CertificateContent {
-    programName: string
-    programDates: string
-    department: string
-    faculty: string
-    institution: string
-    location: string
-    coordinatorName?: string
-    hodName?: string
+const auth = new google.auth.GoogleAuth({
+    credentials: {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+})
+
+const sheets = google.sheets({ version: 'v4', auth })
+const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID!
+
+const DEFAULT_CONTENT: CertificateContent = {
+    programName: '',
+    institution: '',
+    department: '',
+    faculty: '',
+    location: '',
+    address: '',
+    programDates: '',
+    footerText: '',
+    coordinatorName: '',
+    hodName: '',
+    logoDataUrl: '',
+    coordinatorSignatureDataUrl: '',
+    hodSignatureDataUrl: '',
 }
 
-export async function getCertificateContentForEvent(
-    eventId: string
-): Promise<CertificateContent> {
+export async function getCertificateContentForEvent(eventId: string) {
     try {
-        const auth = new google.auth.GoogleAuth({
-            credentials: {
-                client_email: process.env.GOOGLE_CLIENT_EMAIL,
-                private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            },
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        })
-
-        const sheets = google.sheets({ version: 'v4', auth })
-        const spreadsheetId = process.env.GOOGLE_SHEET_ID!
+        const safeEventId = eventId || 'default-event'
+        const SHEET_NAME = `CertificateContent_${safeEventId}`
 
         const res = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `CertificateContent_${eventId}!A:B`,
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!A:B`,
         })
 
-        const rows = res.data.values ?? []
-        const map = Object.fromEntries(rows.slice(1))
+        const rows = res.data.values || []
+
+        const raw: Record<string, string> = {}
+        rows.forEach(([key, value]) => {
+            if (key) raw[key] = value ?? ''
+        })
+
+        const startDate = raw.startDate
+        const endDate = raw.endDate
+
+        const programDates =
+            startDate && endDate
+                ? `${startDate} and ${endDate}`
+                : raw.programDates || ''
+
+        const footerText =
+            raw.footerText ||
+            [raw.coordinatorName, raw.hodName]
+                .filter(Boolean)
+                .join(' • ')
 
         return {
-            programName: map.programName || 'Program Name',
-            programDates: map.programDates || 'Program Dates',
-            department: map.department || '',
-            faculty: map.faculty || '',
-            institution: map.institution || '',
-            location: map.location || '',
-            coordinatorName: map.coordinatorName || '',
-            hodName: map.hodName || '',
+            ...DEFAULT_CONTENT,
+            programName: raw.programName || '',
+            institution: raw.institution || '',
+            department: raw.department || '',
+            faculty: raw.faculty || '',
+            location: raw.location || '',
+            address: raw.address || '',
+            startDate: startDate || '',
+            endDate: endDate || '',
+            programDates,
+            footerText,
+            coordinatorName: raw.coordinatorName || '',
+            hodName: raw.hodName || '',
+            logoDataUrl: raw.logoDataUrl || '',
+            coordinatorSignatureDataUrl:
+                raw.coordinatorSignatureDataUrl || '',
+            hodSignatureDataUrl: raw.hodSignatureDataUrl || '',
         }
     } catch (error) {
-        console.warn(
-            `[CertificateContent] Falling back to defaults for event ${eventId}`,
-            error
-        )
-
-        // ✅ SAFE DEFAULTS — preview will always work
-        return {
-            programName: 'Sample Program',
-            programDates: '01 Jan 2025 – 02 Jan 2025',
-            department: 'Department Name',
-            faculty: 'Faculty Name',
-            institution: 'Institution Name',
-            location: 'Location',
-            coordinatorName: '',
-            hodName: '',
-        }
+        console.warn('[CertificateContent] Falling back to defaults', error)
+        return DEFAULT_CONTENT
     }
 }

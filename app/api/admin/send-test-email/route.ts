@@ -18,8 +18,8 @@ export async function POST(req: Request) {
     await sendCertificateEmail({
       to: email,
       recipientName: name,
-      programName: content.programName,
-      institution: content.institution,
+      programName: content.programName || '',
+      institution: content.institution || '',
       pdfBuffer,
     })
 

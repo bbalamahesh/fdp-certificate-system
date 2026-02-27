@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
 import { renderCertificate } from '@/lib/certificates/renderCertificate'
 import { getCertificateConfigForOrg } from '@/lib/certificates/getCertificateConfig'
-import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContent'
+import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContentForEvent'
 import { getRegistrationByCertificateId } from '@/lib/googleSheets'
+import QRCode from 'qrcode'
 
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url)
+
         const eventId = searchParams.get('eventId')
         const certificate_id = searchParams.get('certificate_id')
+        const download = searchParams.get('download') === '1'
 
         const layout = await getCertificateConfigForOrg()
 
@@ -17,11 +20,10 @@ export async function GET(req: Request) {
             recipientName: string
             certificateId: string
             issuedAt: string
+            verificationUrl: string
         }
 
-        /**
-         * ✅ Issued certificate preview (row-specific)
-         */
+        /* ---------------- ISSUED CERTIFICATE PREVIEW ---------------- */
         if (certificate_id) {
             const registration =
                 await getRegistrationByCertificateId(certificate_id)
@@ -33,32 +35,34 @@ export async function GET(req: Request) {
                 )
             }
 
-            // 🔑 single-event system → reuse default event
             content = await getCertificateContentForEvent('default-event')
+
+            const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/verify/PREVIEW-${certificate_id}`
 
             certificateData = {
                 recipientName: registration.name,
                 certificateId: registration.certificate_id,
-                issuedAt: new Date().toLocaleDateString(),
+                issuedAt:
+                    registration.certificate_issued_at ||
+                    new Date().toLocaleDateString(),
+                verificationUrl,
             }
         }
 
-        /**
-         * ✅ Live preview (event-level)
-         */
+        /* ---------------- LIVE EVENT PREVIEW ---------------- */
         else if (eventId) {
             content = await getCertificateContentForEvent(eventId)
+
+            const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/verify/PREVIEW-0001`
 
             certificateData = {
                 recipientName: 'Test Participant',
                 certificateId: 'CERT-PREVIEW-0001',
                 issuedAt: new Date().toLocaleDateString(),
+                verificationUrl,
             }
         }
 
-        /**
-         * ❌ Invalid request
-         */
         else {
             return NextResponse.json(
                 { error: 'Missing eventId or certificate_id' },
@@ -66,12 +70,19 @@ export async function GET(req: Request) {
             )
         }
 
+        /* ---------------- GENERATE QR FOR PREVIEW ---------------- */
+        const qrCodeDataUrl = await QRCode.toDataURL(
+            certificateData.verificationUrl
+        )
+
+        /* ---------------- RENDER PDF ---------------- */
         const doc = renderCertificate({
             recipientName: certificateData.recipientName,
             certificateId: certificateData.certificateId,
             issuedAt: certificateData.issuedAt,
             layout,
             content,
+            qrCode: qrCodeDataUrl,
         })
 
         const chunks: Buffer[] = []
@@ -83,8 +94,9 @@ export async function GET(req: Request) {
                     new NextResponse(Buffer.concat(chunks), {
                         headers: {
                             'Content-Type': 'application/pdf',
-                            'Content-Disposition':
-                                'inline; filename="certificate-preview.pdf"',
+                            'Content-Disposition': download
+                                ? `attachment; filename="${certificateData.certificateId}.pdf"`
+                                : 'inline; filename="certificate-preview.pdf"',
                         },
                     })
                 )

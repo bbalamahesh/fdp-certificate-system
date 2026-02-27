@@ -19,11 +19,13 @@ export async function GET(
         }
 
         return NextResponse.json({
+            valid: true,
             name: registration.name,
+            title: registration.title,
             email: registration.email,
             organization: registration.organization,
             certificate_id: registration.certificate_id,
-            issued_at: registration.issued_at,
+            certificate_issued_at: registration.certificate_issued_at,
         })
     } catch (error) {
         console.error('VERIFY CERT ERROR:', error)

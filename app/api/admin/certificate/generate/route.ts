@@ -5,10 +5,20 @@ import { getCertificateConfigForOrg } from '@/lib/certificates/getCertificateCon
 import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContentForEvent'
 import { sendCertificateEmail } from '@/lib/email/sendCertificateEmail'
 import { nanoid } from 'nanoid'
+import { logAuditEvent } from '@/lib/audit/logAuditEvent'
+import crypto from 'crypto'
+import QRCode from 'qrcode'
+
 const SHEET_NAME = 'Registrations'
+
+function generateVerificationCode() {
+    return crypto.randomUUID()
+}
+
 export async function POST(req: Request) {
     try {
         const { sheetRow, name, email, eventId } = await req.json()
+        const safeEventId = eventId || 'default-event'
 
         if (!sheetRow || !name || !email) {
             return NextResponse.json(
@@ -17,11 +27,12 @@ export async function POST(req: Request) {
             )
         }
 
-        /* ---------------- GOOGLE SHEETS ---------------- */
+        /* ---------------- GOOGLE SHEETS AUTH ---------------- */
         const auth = new google.auth.GoogleAuth({
             credentials: {
                 client_email: process.env.GOOGLE_CLIENT_EMAIL,
-                private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+                private_key:
+                    process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
             },
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         })
@@ -29,15 +40,14 @@ export async function POST(req: Request) {
         const sheets = google.sheets({ version: 'v4', auth })
         const spreadsheetId = process.env.GOOGLE_SHEET_ID!
 
-        /* ---------------- BACKEND GUARD ---------------- */
-        // Check if certificate already issued
+        /* ---------------- PREVENT DUPLICATE CERTIFICATE ---------------- */
         const existing = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: `${SHEET_NAME}!G${sheetRow}:H${sheetRow}`,
+            range: `${SHEET_NAME}!G${sheetRow}:G${sheetRow}`,
         })
 
-        const [existingCertificateId] =
-            existing.data.values?.[0] || []
+        const existingCertificateId =
+            existing.data.values?.[0]?.[0]
 
         if (existingCertificateId) {
             return NextResponse.json(
@@ -46,57 +56,94 @@ export async function POST(req: Request) {
             )
         }
 
-        /* ---------------- LOAD CONFIG + CONTENT ---------------- */
-        const layout = await getCertificateConfigForOrg()
-        const content = await getCertificateContentForEvent(eventId)
-
-        /* ---------------- CERTIFICATE META ---------------- */
+        /* ---------------- GENERATE CERTIFICATE META ---------------- */
         const certificateId = `CERT-${nanoid(8).toUpperCase()}`
         const issuedAtISO = new Date().toISOString()
         const issuedAtDisplay = new Date().toLocaleDateString()
 
-        /* ---------------- PDF ---------------- */
+        const verificationCode = generateVerificationCode()
+
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin
+        const verificationUrl = `${baseUrl}/verify/${verificationCode}`
+
+        /* ---------------- GENERATE QR CODE ---------------- */
+        const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl)
+
+        /* ---------------- LOAD CONFIG + CONTENT ---------------- */
+        const layout = await getCertificateConfigForOrg()
+        const content = await getCertificateContentForEvent(safeEventId)
+
+        /* ---------------- GENERATE PDF ---------------- */
         const doc = renderCertificate({
             recipientName: name,
             certificateId,
             issuedAt: issuedAtDisplay,
             layout,
             content,
+            qrCode: qrCodeDataUrl, // 🔥 NEW
         })
 
-        const chunks: Buffer[] = []
-        doc.on('data', (c) => chunks.push(c))
-        doc.end()
-
-        const pdfBuffer = await new Promise<Buffer>((resolve) => {
+        const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = []
+            doc.on('data', (c: Buffer) => chunks.push(c))
             doc.on('end', () => resolve(Buffer.concat(chunks)))
+            doc.on('error', reject)
+            doc.end()
         })
-
-        /* ---------------- UPDATE GOOGLE SHEET ---------------- */
-        // G → certificateId
-        // H → certificateIssuedAt
+        console.log("QR LENGTH:", qrCodeDataUrl?.length)
+        /* ---------------- UPDATE GOOGLE SHEET (G → K) ---------------- */
         await sheets.spreadsheets.values.update({
             spreadsheetId,
-            range: `${SHEET_NAME}!G${sheetRow}:H${sheetRow}`,
+            range: `${SHEET_NAME}!G${sheetRow}:K${sheetRow}`,
             valueInputOption: 'RAW',
             requestBody: {
-                values: [[certificateId, issuedAtISO]],
+                values: [[
+                    certificateId,      // G
+                    issuedAtISO,        // H
+                    verificationCode,   // I
+                    verificationUrl,    // J
+                    'ACTIVE',           // K
+                ]],
             },
         })
 
-        /* ---------------- EMAIL ---------------- */
+        /* ---------------- SEND EMAIL ---------------- */
         await sendCertificateEmail({
             to: email,
             recipientName: name,
-            programName: content.programName,
-            institution: content.institution,
+            programName: content.programName || '',
+            institution: content.institution || '',
             pdfBuffer,
         })
 
+        /* ---------------- AUDIT LOGS ---------------- */
+        await logAuditEvent({
+            action: 'CERT_GENERATED',
+            actor: 'admin',
+            target: certificateId,
+            metadata: {
+                sheetRow,
+                recipientEmail: email,
+                eventId: safeEventId,
+            },
+        })
+
+        await logAuditEvent({
+            action: 'CERT_GENERATED',
+            actor: email,
+            target: certificateId,
+            metadata: {
+                sheetRow,
+                recipientEmail: email,
+            },
+        })
+        console.log("Verification URL:", verificationUrl)
+        console.log("QR Generated:", qrCodeDataUrl?.substring(0, 50))
         return NextResponse.json({
             success: true,
             certificateId,
             issuedAt: issuedAtISO,
+            verificationUrl,
         })
     } catch (error: any) {
         console.error('CERT GENERATE ERROR:', error)

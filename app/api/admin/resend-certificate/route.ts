@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { getRegistrationByCertificateId } from '@/lib/googleSheets'
 import { renderCertificate } from '@/lib/certificates/renderCertificate'
 import { getCertificateConfigForOrg } from '@/lib/certificates/getCertificateConfig'
-import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContent'
+import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContentForEvent'
 import { sendCertificateEmail } from '@/lib/email/sendCertificateEmail'
-
+import { logAuditEvent } from '@/lib/audit/logAuditEvent'
 export async function POST(req: Request) {
     try {
         const { certificate_id } = await req.json()
@@ -53,9 +53,15 @@ export async function POST(req: Request) {
         await sendCertificateEmail({
             to: registration.email,
             recipientName: registration.name,
-            programName: content.programName,     // ← from certificate content
-            institution: content.institution,     // ← from certificate content
+            programName: content.programName || '',     // ← from certificate content
+            institution: content.institution || '',     // ← from certificate content
             pdfBuffer,
+        })
+
+        await logAuditEvent({
+            action: 'CERT_RESENT',
+            actor: 'admin',
+            target: certificate_id,
         })
 
         return NextResponse.json({ success: true })

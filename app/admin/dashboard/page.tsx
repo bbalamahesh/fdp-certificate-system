@@ -54,7 +54,7 @@ export default function AdminDashboard() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={() => router.push('/admin/settings/certificate')}
+              onClick={() => router.push('/admin/certificate-settings')}
             >
               <Award className="mr-2 h-4 w-4" />
               Certificate Settings

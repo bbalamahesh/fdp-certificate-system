@@ -23,6 +23,7 @@ interface CertificateLayoutConfig {
     orientation: Orientation
     signatureCount: 0 | 1 | 2
     watermarkEnabled: boolean
+    showQrCode: boolean
 }
 
 interface CertificateContent {
@@ -139,6 +140,16 @@ export default function CertificateSettingsForm() {
                             }
                         />
                         <span className="text-sm">Show watermark</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <Switch
+                            checked={layout.showQrCode}
+                            onCheckedChange={(v) =>
+                                setLayout({ ...layout, showQrCode: v })
+                            }
+                        />
+                        <span className="text-sm">Show QR code</span>
                     </div>
                 </CardContent>
             </Card>

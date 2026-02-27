@@ -5,10 +5,11 @@ import { getCertificateConfigForOrg } from '@/lib/certificates/getCertificateCon
 import { getCertificateContentForEvent } from '@/lib/certificates/getCertificateContentForEvent'
 import { sendCertificateEmail } from '@/lib/email/sendCertificateEmail'
 import { nanoid } from 'nanoid'
+import { logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 export async function POST(req: Request) {
     try {
-        const { rows, eventId } = await req.json()
+        const { rows, eventId = 'default-event' } = await req.json()
 
         if (!Array.isArray(rows) || rows.length === 0) {
             return NextResponse.json(
@@ -68,13 +69,13 @@ export async function POST(req: Request) {
                     content,
                 })
 
-                const chunks: Buffer[] = []
-                doc.on('data', (c) => chunks.push(c))
-                doc.end()
-
-                const pdfBuffer = await new Promise<Buffer>((resolve) =>
+                const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+                    const chunks: Buffer[] = []
+                    doc.on('data', (c) => chunks.push(c))
                     doc.on('end', () => resolve(Buffer.concat(chunks)))
-                )
+                    doc.on('error', reject)
+                    doc.end()
+                })
 
                 // Update sheet
                 await sheets.spreadsheets.values.update({
@@ -90,8 +91,8 @@ export async function POST(req: Request) {
                 await sendCertificateEmail({
                     to: email,
                     recipientName: name,
-                    programName: content.programName,
-                    institution: content.institution,
+                    programName: content.programName || '',
+                    institution: content.institution || '',
                     pdfBuffer,
                 })
 
@@ -99,19 +100,36 @@ export async function POST(req: Request) {
             } catch (err: any) {
                 summary.failed++
                 summary.errors.push(
-                    `Row ${row.sheetRow}: ${err?.message || 'Unknown error'}`
+                    `Row ${sheetRow}: ${err?.message || 'Unknown error'}`
                 )
             }
         }
+
+        /* ---------------- AUDIT LOG (ONCE) ---------------- */
+        await logAuditEvent({
+            action: 'BULK_GENERATE',
+            actor: 'admin',
+            target: `${rows.length} rows`,
+            metadata: {
+                generated: summary.generated,
+                skipped: summary.skipped,
+                failed: summary.failed,
+            },
+        })
 
         return NextResponse.json({
             success: true,
             summary,
         })
     } catch (error: any) {
-        console.error('BULK GENERATE ERROR:', error)
+        console.error('BULK GENERATE ERROR (FULL):', error)
+
         return NextResponse.json(
-            { error: 'Bulk generation failed' },
+            {
+                error: 'Bulk generation failed',
+                details: error?.message,
+                stack: error?.stack,
+            },
             { status: 500 }
         )
     }

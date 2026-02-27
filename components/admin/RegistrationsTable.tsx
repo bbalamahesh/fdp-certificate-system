@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -81,14 +82,17 @@ export default function RegistrationsTable() {
   const [originalRow, setOriginalRow] =
     useState<Registration | null>(null)
 
-
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [pendingDeletes, setPendingDeletes] = useState<Registration[]>([])
 
   const [previewCertificateId, setPreviewCertificateId] =
     useState<string | null>(null)
+  const [showQrCode, setShowQrCode] = useState(true)
+  const [updatingQr, setUpdatingQr] = useState(false)
   /* -------------------- DATA -------------------- */
   useEffect(() => {
     loadRegistrations()
+    loadQrSetting()
   }, [])
 
   const loadRegistrations = async () => {
@@ -96,6 +100,55 @@ export default function RegistrationsTable() {
     const data = await res.json()
     setRegistrations(data.registrations || [])
     setLoading(false)
+  }
+
+  const loadQrSetting = async () => {
+    try {
+      const res = await fetch('/api/admin/certificate-config')
+      const data = await res.json()
+      if (typeof data?.config?.showQrCode === 'boolean') {
+        setShowQrCode(data.config.showQrCode)
+      }
+    } catch {
+      // keep default true
+    }
+  }
+
+  const updateQrSetting = async (nextValue: boolean) => {
+    setUpdatingQr(true)
+    try {
+      const getRes = await fetch('/api/admin/certificate-config')
+      const getData = await getRes.json()
+      const current = getData?.config || {
+        title: 'Certificate of Participation',
+        eventType: 'FDP',
+        orientation: 'landscape',
+        signatureCount: 2,
+        watermarkEnabled: true,
+        showQrCode: true,
+      }
+
+      const saveRes = await fetch('/api/admin/certificate-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...current,
+          showQrCode: nextValue,
+        }),
+      })
+
+      if (!saveRes.ok) {
+        throw new Error('Failed to update QR setting')
+      }
+
+      setShowQrCode(nextValue)
+      window.dispatchEvent(new Event('certificate-preview-refresh'))
+      toast.success(`QR code ${nextValue ? 'enabled' : 'disabled'}`)
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update QR setting')
+    } finally {
+      setUpdatingQr(false)
+    }
   }
 
   /* -------------------- FILTER + PAGINATION -------------------- */
@@ -323,7 +376,9 @@ export default function RegistrationsTable() {
           return
         }
 
-        throw new Error(data?.error || 'Failed to generate certificate')
+        throw new Error(
+          data?.details || data?.error || 'Failed to generate certificate'
+        )
       }
 
       toast.success('Certificate generated')
@@ -354,15 +409,34 @@ export default function RegistrationsTable() {
     )
 
     try {
-      const res = await fetch('/api/admin/certificate/bulk-generate', { ... })
+      const res = await fetch(
+        '/api/admin/certificate/bulk-generate',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows }),
+        }
+      )
 
       const data = await res.json()
 
       toast.dismiss(toastId)
 
-      toast.success(
-        `Done! Generated: ${data.summary.generated}, Skipped: ${data.summary.skipped}, Failed: ${data.summary.failed}`
-      )
+      if (!res.ok) {
+        throw new Error(data?.error || 'Bulk generation failed')
+      }
+
+      const { generated, skipped, failed } = data.summary
+
+      if (generated === 0 && skipped > 0) {
+        toast.info(
+          `${skipped} certificates were already issued and skipped`
+        )
+      } else {
+        toast.success(
+          `Done! Generated: ${generated}, Skipped: ${skipped}, Failed: ${failed}`
+        )
+      }
 
       loadRegistrations()
       setSelectedIds([])
@@ -370,343 +444,353 @@ export default function RegistrationsTable() {
       toast.dismiss(toastId)
       toast.error(e.message || 'Bulk generation failed')
     }
-
-    const data = await res.json()
-
-    if (!res.ok) {
-      throw new Error(data?.error || 'Bulk failed')
-    }
-
-    toast.success(
-      `Done! Generated: ${data.summary.generated}, Skipped: ${data.summary.skipped}, Failed: ${data.summary.failed}`
-    )
-
-    loadRegistrations()
-    setSelectedIds([])
-  } catch (e: any) {
-    toast.error(e.message || 'Bulk generation failed')
   }
-}
 
 
-return (
 
-  <div className="space-y-4">
-    {/* Search */}
-    <div className="flex justify-between">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-        <Input
-          className="pl-9"
-          placeholder="Search…"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value)
-            setPage(1)
-          }}
-        />
+  return (
+
+    <div className="space-y-4">
+      {/* Search */}
+      <div className="flex justify-between">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
+          <Input
+            className="pl-9"
+            placeholder="Search…"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setPage(1)
+            }}
+          />
+        </div>
+
+        <Button variant="outline" onClick={loadRegistrations}>
+          <RefreshCcw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
-      <Button variant="outline" onClick={loadRegistrations}>
-        <RefreshCcw className="h-4 w-4 mr-2" />
-        Refresh
-      </Button>
-    </div>
-
-    {/* Bulk bar */}
-    <div className="flex gap-3 items-center p-3 border rounded-md bg-muted">
-      <span className="text-sm font-medium">
-        {selectedIds.length} selected
-      </span>
-
-      <Button
-        variant="destructive"
-        disabled={selectedIds.length < 2 || saving || editingId !== null}
-        onClick={() => {
-          setDeleteMode('bulk')
-          setConfirmOpen(true)
-        }}
-      >
-        Bulk Delete
-      </Button>
-
-      <Button
-        disabled={
-          selectedIds.length === 0 ||
-          saving ||
-          editingId !== null
-        }
-        onClick={bulkGenerateCertificates}
-      >
-        Bulk Generate Certificates
-      </Button>
-
-      {selectedIds.length === 1 && (
-        <span className="text-xs text-muted-foreground">
-          Select at least 2 rows for bulk delete
+      {/* Bulk bar */}
+      <div className="flex gap-3 items-center p-3 border rounded-md bg-muted">
+        <span className="text-sm font-medium">
+          {selectedIds.length} selected
         </span>
-      )}
 
-    </div>
+        <Button
+          variant="destructive"
+          disabled={selectedIds.length < 2 || saving || editingId !== null}
+          onClick={() => {
+            setDeleteMode('bulk')
+            setConfirmOpen(true)
+          }}
+        >
+          Bulk Delete
+        </Button>
 
-    {/* Table */}
-    <div className="border rounded-md overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[40px]">
-              <Checkbox
-                checked={
-                  paginated.length > 0 &&
-                  paginated.every((r) =>
-                    selectedIds.includes(r.id)
-                  )
-                }
-                onCheckedChange={toggleSelectAll}
-              />
-            </TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Org</TableHead>
-            <TableHead>Edit</TableHead>
-            <TableHead>Certificate</TableHead>
-            <TableHead>Actions</TableHead>
-            <TableHead>Certificate Id</TableHead>
-          </TableRow>
-        </TableHeader>
+        <Button
+          disabled={
+            selectedIds.length === 0 ||
+            saving ||
+            editingId !== null
+          }
+          onClick={bulkGenerateCertificates}
+        >
+          Bulk Generate Certificates
+        </Button>
 
-        <TableBody>
-          {paginated.map((r) => {
-            const certId = r.certificateId
+        {selectedIds.length === 1 && (
+          <span className="text-xs text-muted-foreground">
+            Select at least 2 rows for bulk delete
+          </span>
+        )}
 
-            return (
-              <TableRow key={r.id}>
-                <TableCell>
-                  <Checkbox
-                    checked={selectedIds.includes(r.id)}
-                    onCheckedChange={() => toggleRow(r.id)}
-                    disabled={editingId !== null || saving}
-                  />
-                </TableCell>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm">Show QR code</span>
+          <Switch
+            checked={showQrCode}
+            disabled={updatingQr}
+            onCheckedChange={updateQrSetting}
+          />
+        </div>
 
-                {(['name', 'email', 'title', 'phone', 'organization'] as const).map(
-                  (field) => (
-                    <TableCell key={field}>
-                      {editingId === r.id ? (
-                        <Input
-                          value={(editValues[field] as string) || ''}
-                          onChange={(e) =>
-                            setEditValues((v) => ({
-                              ...v,
-                              [field]: e.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        r[field] || '—'
-                      )}
-                    </TableCell>
-                  )
-                )}
+      </div>
 
-                <TableCell>
-                  {editingId === r.id ? (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={saveEdit}
-                        disabled={saving}
-                      >
-                        {saving ? (
-                          <>
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            Saving…
-                          </>
+      {/* Table */}
+      <div className="border rounded-md overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={
+                    paginated.length > 0 &&
+                    paginated.every((r) =>
+                      selectedIds.includes(r.id)
+                    )
+                  }
+                  onCheckedChange={toggleSelectAll}
+                />
+              </TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Org</TableHead>
+              <TableHead>Edit</TableHead>
+              <TableHead>Certificate</TableHead>
+              <TableHead>Actions</TableHead>
+              <TableHead>Certificate Id</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {paginated.map((r) => {
+              const certId = r.certificateId
+
+              return (
+                <TableRow key={r.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedIds.includes(r.id)}
+                      onCheckedChange={() => toggleRow(r.id)}
+                      disabled={editingId !== null || saving}
+                    />
+                  </TableCell>
+
+                  {(['name', 'email', 'title', 'phone', 'organization'] as const).map(
+                    (field) => (
+                      <TableCell key={field}>
+                        {editingId === r.id ? (
+                          <Input
+                            value={(editValues[field] as string) || ''}
+                            onChange={(e) =>
+                              setEditValues((v) => ({
+                                ...v,
+                                [field]: e.target.value,
+                              }))
+                            }
+                          />
                         ) : (
-                          <>
-                            <Save className="h-3 w-3 mr-1" />
-                            Save
-                          </>
+                          r[field] || '—'
                         )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={cancelEdit}
-                        disabled={saving}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startEdit(r)}
-                      disabled={saving}
-                    >
-                      <Pencil className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
+                      </TableCell>
+                    )
                   )}
-                </TableCell>
-                <TableCell>
-                  {!certId ? (
-                    <Button
-                      size="sm"
-                      onClick={() => generateCertificate(r)}
-                      disabled={generatingId === r.id}
-                    >
-                      {generatingId === r.id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Generating…
-                        </>
-                      ) : (
-                        'Generate'
-                      )}
-                    </Button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPreviewCertificateId(certId)}
-                      >
-                        View
-                      </Button>
 
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          window.open(`/api/admin/certificate/${certId}`, '_blank')
-                        }
-                      >
-                        Download
-                      </Button>
-                      {certId && (
+                  <TableCell>
+                    {editingId === r.id ? (
+                      <div className="flex gap-2">
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={async () => {
-                            try {
-                              await fetch('/api/admin/resend-certificate', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ certificate_id: certId }),
-                              })
+                          onClick={saveEdit}
+                          disabled={saving}
+                        >
+                          {saving ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Saving…
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3 w-3 mr-1" />
+                              Save
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={cancelEdit}
+                          disabled={saving}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startEdit(r)}
+                        disabled={saving}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {!certId ? (
+                      <Button
+                        size="sm"
+                        onClick={() => generateCertificate(r)}
+                        disabled={generatingId === r.id}
+                      >
+                        {generatingId === r.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Generating…
+                          </>
+                        ) : (
+                          'Generate'
+                        )}
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPreviewCertificateId(certId)}
+                        >
+                          View
+                        </Button>
 
-                              toast.success('Certificate email re-sent')
-                            } catch (e: any) {
-                              if (e?.message?.includes('already issued')) {
-                                toast.error(
-                                  'Certificate already generated. You can view or download it.'
-                                )
-                                loadRegistrations()
-                              } else {
-                                toast.error('Failed to generate certificate')
-                              }
-                            }
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={downloadingId === certId}
+                          onClick={() => {
+                            setDownloadingId(certId)
+
+                            window.open(
+                              `/api/admin/certificate/preview?certificate_id=${certId}&download=1`,
+                              '_blank'
+                            )
+
+                            // reset loader shortly after tab opens
+                            setTimeout(() => setDownloadingId(null), 1500)
                           }}
                         >
-                          Resend Email
+                          {downloadingId === certId ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Downloading…
+                            </>
+                          ) : (
+                            'Download'
+                          )}
                         </Button>
-                      )}
-                    </div>
-                  )}
-                </TableCell>
+                        {certId && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await fetch('/api/admin/resend-certificate', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ certificate_id: certId }),
+                                })
 
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={saving}
-                    onClick={() => {
-                      setDeleteMode('single')
-                      setRowToDelete(r)
-                      setConfirmOpen(true)
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Delete
-                  </Button>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {certId || '—'}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </div>
+                                toast.success('Certificate email re-sent')
+                              } catch (e: any) {
+                                if (e?.message?.includes('already issued')) {
+                                  toast.error(
+                                    'Certificate already generated. You can view or download it.'
+                                  )
+                                  loadRegistrations()
+                                } else {
+                                  toast.error('Failed to generate certificate')
+                                }
+                              }
+                            }}
+                          >
+                            Resend Email
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
 
-    {/* Pagination */}
-    <div className="flex justify-end gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={page === 1}
-        onClick={() => setPage((p) => p - 1)}
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={saving}
+                      onClick={() => {
+                        setDeleteMode('single')
+                        setRowToDelete(r)
+                        setConfirmOpen(true)
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
+                    </Button>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {certId || '—'}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page === 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
+          Prev
+        </Button>
+
+        <span className="text-sm px-2 flex items-center">
+          Page {page} of {totalPages}
+        </span>
+
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page === totalPages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteMode === 'bulk'
+                ? 'Delete registrations?'
+                : 'Delete registration?'}
+            </AlertDialogTitle>
+
+            <AlertDialogDescription>
+              {deleteMode === 'bulk'
+                ? `Are you sure you want to delete ${selectedIds.length} registrations? This action can be undone for a short time.`
+                : 'Are you sure you want to delete this registration? This action can be undone for a short time.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog
+        open={!!previewCertificateId}
+        onOpenChange={() => setPreviewCertificateId(null)}
       >
-        Prev
-      </Button>
-
-      <span className="text-sm px-2 flex items-center">
-        Page {page} of {totalPages}
-      </span>
-
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={page === totalPages}
-        onClick={() => setPage((p) => p + 1)}
-      >
-        Next
-      </Button>
+        <DialogContent className="max-w-5xl">
+          {previewCertificateId && (
+            <CertificatePreviewFrame
+              certificate_id={previewCertificateId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
-    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {deleteMode === 'bulk'
-              ? 'Delete registrations?'
-              : 'Delete registration?'}
-          </AlertDialogTitle>
-
-          <AlertDialogDescription>
-            {deleteMode === 'bulk'
-              ? `Are you sure you want to delete ${selectedIds.length} registrations? This action can be undone for a short time.`
-              : 'Are you sure you want to delete this registration? This action can be undone for a short time.'}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onClick={confirmDelete}
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    <Dialog
-      open={!!previewCertificateId}
-      onOpenChange={() => setPreviewCertificateId(null)}
-    >
-      <DialogContent className="max-w-5xl">
-        {previewCertificateId && (
-          <CertificatePreviewFrame
-            certificate_id={previewCertificateId}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
-  </div>
-)
+  )
 }

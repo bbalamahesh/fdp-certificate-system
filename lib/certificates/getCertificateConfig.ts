@@ -26,16 +26,29 @@ export async function getCertificateConfigForOrg(
         // Expecting:
         // key | value
         const map = Object.fromEntries(rows.slice(1))
+        let textStyles: CertificateConfig['textStyles'] = {}
+        try {
+            textStyles = map.textStyles ? JSON.parse(map.textStyles) : {}
+        } catch {
+            textStyles = {}
+        }
 
         return {
             title: map.title || 'Certificate of Participation',
-            eventType: map.eventType || 'Event',
+            eventType: map.eventType || '',
+            subtitle1: map.subtitle1 || '',
+            subtitle2: map.subtitle2 || '',
             orientation:
                 map.orientation === 'portrait' ? 'portrait' : 'landscape',
             signatureCount: [0, 1, 2].includes(Number(map.signatureCount))
                 ? (Number(map.signatureCount) as 0 | 1 | 2)
                 : 2,
             watermarkEnabled: map.watermarkEnabled !== 'false',
+            showQrCode: map.showQrCode !== 'false',
+            logoPosition: map.logoPosition === 'right' ? 'right' : 'left',
+            backgroundTemplate: map.backgroundTemplate || 'none',
+            customBackgroundUrl: map.customBackgroundUrl || '',
+            textStyles,
         }
     } catch (error) {
         console.warn(
@@ -46,10 +59,17 @@ export async function getCertificateConfigForOrg(
         // ✅ SAFE DEFAULTS — preview will NEVER fail
         return {
             title: 'Certificate of Participation',
-            eventType: 'FDP',
+            eventType: '',
+            subtitle1: '',
+            subtitle2: '',
             orientation: 'landscape',
             signatureCount: 2,
             watermarkEnabled: true,
+            showQrCode: true,
+            logoPosition: 'left',
+            backgroundTemplate: 'none',
+            customBackgroundUrl: '',
+            textStyles: {},
         }
     }
 }

@@ -1,7 +1,7 @@
 import type { CertificateContent } from './types'
 import { renderCertificate } from './renderCertificate'
 import { getCertificateConfigForOrg } from './getCertificateConfig'
-import { getCertificateContentForEvent } from './getCertificateContent'
+import { getCertificateContentForEvent } from './getCertificateContentForEvent'
 
 interface GenerateArgs {
     recipientName: string
