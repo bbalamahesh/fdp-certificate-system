@@ -31,6 +31,7 @@ export default function AdminLogin() {
 
       if (response.ok) {
         localStorage.setItem('adminToken', data.token);
+        localStorage.setItem('adminUsername', credentials.username);
         router.push('/admin/dashboard');
       } else {
         setError(data.error || 'Invalid credentials');

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, LogOut, Award, Eye } from 'lucide-react'
+import { Users, Eye } from 'lucide-react'
 
 import RegistrationsTable from '@/components/admin/RegistrationsTable'
 import CertificatePreviewFrame from '@/components/admin/CertificatePreviewFrame'
@@ -22,11 +22,6 @@ export default function AdminDashboard() {
     }
   }, [router])
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken')
-    router.push('/admin/login')
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -34,41 +29,8 @@ export default function AdminDashboard() {
       </div>
     )
   }
-
-
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="bg-white border-b shadow-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Admin Dashboard
-            </h1>
-            <p className="text-sm text-gray-600">
-              FDP Certificate Management System
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/admin/certificate-settings')}
-            >
-              <Award className="mr-2 h-4 w-4" />
-              Certificate Settings
-            </Button>
-
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main */}
       <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Registrations */}
         <Card className="p-6">
