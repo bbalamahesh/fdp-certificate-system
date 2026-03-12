@@ -1,11 +1,96 @@
 'use client'
 
-import RegistrationForm from './../components/registration/RegistrationForm'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
-export default function Page() {
+type EventCard = {
+  id: string
+  slug: string
+  name: string
+  mode: 'ONLINE' | 'OFFLINE' | 'HYBRID'
+  fromDate: string
+  toDate: string
+  posterUrl: string | null
+  organizerInstitute: string | null
+}
+
+export default function HomePage() {
+  const [events, setEvents] = useState<EventCard[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await fetch('/api/events')
+        const data = await res.json()
+        setEvents(data.events || [])
+      } catch (error) {
+        console.error(error)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <RegistrationForm />
-    </div>
+    <main className="min-h-screen bg-slate-50">
+      <section className="mx-auto max-w-7xl px-4 py-10">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Upcoming Events & Programs</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Only super-admin approved events are listed here.
+            </p>
+          </div>
+
+          <Link href="/admin/events/new">
+            <Button>Create Event (Admin)</Button>
+          </Link>
+        </div>
+
+        {loading ? (
+          <p>Loading events...</p>
+        ) : events.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              No approved events yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {events.map((event) => (
+              <Card key={event.id} className="overflow-hidden">
+                {event.posterUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={event.posterUrl}
+                    alt={event.name}
+                    className="h-44 w-full object-cover"
+                  />
+                ) : null}
+                <CardHeader>
+                  <CardTitle className="line-clamp-2">{event.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p><strong>Mode:</strong> {event.mode}</p>
+                  <p>
+                    <strong>Dates:</strong> {new Date(event.fromDate).toLocaleDateString()} -{' '}
+                    {new Date(event.toDate).toLocaleDateString()}
+                  </p>
+                  {event.organizerInstitute ? (
+                    <p><strong>Institute:</strong> {event.organizerInstitute}</p>
+                  ) : null}
+                  <Link href={`/events/${event.slug}`}>
+                    <Button className="w-full">Register</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   )
 }

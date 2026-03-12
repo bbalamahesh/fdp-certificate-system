@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum EventStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EventMode {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+model User {
+  id             String      @id @default(cuid())
+  firstName      String?
+  lastName       String?
+  username       String      @unique
+  email          String?     @unique
+  passwordHash   String
+  securityQuestion String?
+  securityAnswerHash String?
+  role           UserRole
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  createdEvents  Event[]     @relation("CreatedEvents")
+  approvedEvents Event[]     @relation("ApprovedEvents")
+  auditLogs      AuditLog[]
+}
+
+model Event {
+  id                  String       @id @default(cuid())
+  slug                String       @unique
+  name                String
+  mode                EventMode
+  fromDate            DateTime
+  toDate              DateTime
+  posterUrl           String?
+  meetingLink         String?
+  contactEmail        String
+  contactMobile       String
+  organizerFirstName  String
+  organizerLastName   String
+  organizerInstitute  String?
+  organizerDepartment String?
+  organizerAddress    String?
+  status              EventStatus  @default(PENDING)
+  approvedAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  createdById         String
+  approvedById        String?
+
+  createdBy           User         @relation("CreatedEvents", fields: [createdById], references: [id])
+  approvedBy          User?        @relation("ApprovedEvents", fields: [approvedById], references: [id])
+
+  participants        Participant[]
+  certificateConfig   CertificateConfig?
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model Participant {
+  id            String   @id @default(cuid())
+  eventId       String
+  fullName      String
+  email         String
+  mobileNo      String
+  whatsappNo    String?
+  instituteName String?
+  roleLabel     String?
+  createdAt     DateTime @default(now())
+
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, email])
+  @@index([eventId])
+}
+
+model CertificateConfig {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  data        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  targetType  String
+  targetId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id])
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}

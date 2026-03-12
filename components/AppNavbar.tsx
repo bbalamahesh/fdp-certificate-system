@@ -10,25 +10,27 @@ export default function AppNavbar() {
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
   const [username, setUsername] = useState('')
+  const [role, setRole] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken')
     const name = localStorage.getItem('adminUsername') || ''
+    const userRole = localStorage.getItem('adminRole') || ''
     setIsAdmin(!!token)
     setUsername(name)
+    setRole(userRole)
   }, [pathname])
 
   const links = useMemo(() => {
-    const base = [
-      { href: '/', label: 'Registration' },
-    ]
+    const base = [{ href: '/', label: 'Home' }]
 
     if (isAdmin) {
-      return [
-        ...base,
+      const authLinks = [
         { href: '/admin/dashboard', label: 'Dashboard' },
-        { href: '/admin/certificate-settings', label: 'Settings' },
+        { href: '/admin/events/new', label: 'Create Event' },
+        { href: '/admin/certificate-settings', label: 'Certificate Settings' },
       ]
+      return [...base, ...authLinks]
     }
 
     return [...base, { href: '/admin/login', label: 'Admin Login' }]
@@ -37,8 +39,10 @@ export default function AppNavbar() {
   const handleLogout = () => {
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminUsername')
+    localStorage.removeItem('adminRole')
     setIsAdmin(false)
     setUsername('')
+    setRole('')
     router.push('/admin/login')
   }
 
@@ -67,16 +71,16 @@ export default function AppNavbar() {
         </div>
 
         <div className="flex items-center gap-2 text-sm">
-          {isAdmin && (
+          {isAdmin ? (
             <>
               <span className="text-muted-foreground">
-                {username ? `Hi, ${username}` : 'Admin'}
+                {username ? `${username} (${role || 'ADMIN'})` : 'Admin'}
               </span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 Logout
               </Button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

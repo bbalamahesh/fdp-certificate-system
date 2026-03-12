@@ -93,6 +93,30 @@ const DEFAULT_CONTENT: CertificateContentConfig = {
   hodSignatureDataUrl: '',
 }
 
+const BACKGROUND_TEMPLATE_OPTIONS: Array<{
+  value: CertificateLayoutConfig['backgroundTemplate']
+  label: string
+  thumb?: string
+}> = [
+  { value: 'none', label: 'No Background' },
+  {
+    value: 'classic',
+    label: 'Template Classic',
+    thumb: '/certificate-templates/template-classic.png',
+  },
+  {
+    value: 'blue',
+    label: 'Template Blue',
+    thumb: '/certificate-templates/template-blue.png',
+  },
+  {
+    value: 'minimal',
+    label: 'Template Minimal',
+    thumb: '/certificate-templates/template-minimal.png',
+  },
+  { value: 'custom', label: 'Custom Background' },
+]
+
 async function fileToOptimizedDataUrl(
   file: File,
   options?: { maxW?: number; maxH?: number; mimeType?: string; quality?: number }
@@ -564,23 +588,43 @@ export default function CertificateSettingsPage() {
 
               <div className="space-y-2">
                 <Label>Background Template</Label>
-                <Select
-                  value={layout.backgroundTemplate}
-                  onValueChange={(v: CertificateLayoutConfig['backgroundTemplate']) =>
-                    setLayout((prev) => ({ ...prev, backgroundTemplate: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Background</SelectItem>
-                    <SelectItem value="classic">Template Classic</SelectItem>
-                    <SelectItem value="blue">Template Blue</SelectItem>
-                    <SelectItem value="minimal">Template Minimal</SelectItem>
-                    <SelectItem value="custom">Custom Background</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {BACKGROUND_TEMPLATE_OPTIONS.map((template) => {
+                    const active = layout.backgroundTemplate === template.value
+                    return (
+                      <button
+                        key={template.value}
+                        type="button"
+                        onClick={() =>
+                          setLayout((prev) => ({
+                            ...prev,
+                            backgroundTemplate: template.value,
+                          }))
+                        }
+                        className={`overflow-hidden rounded-md border text-left transition ${
+                          active
+                            ? 'border-primary ring-2 ring-primary/30'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        {template.thumb ? (
+                          <img
+                            src={template.thumb}
+                            alt={template.label}
+                            className="h-24 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-24 w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                            {template.value === 'custom'
+                              ? 'Upload your own image'
+                              : 'No background image'}
+                          </div>
+                        )}
+                        <div className="px-2 py-1 text-xs font-medium">{template.label}</div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               {layout.backgroundTemplate === 'custom' && (
