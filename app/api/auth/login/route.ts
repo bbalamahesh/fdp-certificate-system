@@ -65,7 +65,18 @@ export async function POST(req: NextRequest) {
       return res
     }
 
-    const user = await db.user.findUnique({ where: { username } })
+    const user = await db.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+        passwordHash: true,
+        firstName: true,
+        lastName: true,
+      },
+    })
     if (
       !user ||
       !user.isActive ||
