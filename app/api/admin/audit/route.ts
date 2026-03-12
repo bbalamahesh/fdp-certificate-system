@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth/request'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const auth = requireRole(req, ['SUPER_ADMIN'])
   if (auth instanceof NextResponse) return auth
