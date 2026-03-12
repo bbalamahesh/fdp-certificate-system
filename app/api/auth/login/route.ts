@@ -68,7 +68,11 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await db.user.findUnique({ where: { username } })
-    if (!user || !user.isActive || user.role !== 'ADMIN') {
+    if (
+      !user ||
+      !user.isActive ||
+      (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')
+    ) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
