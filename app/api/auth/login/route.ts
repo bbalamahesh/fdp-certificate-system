@@ -17,15 +17,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    const { username, password } = parsed.data
+    const username = parsed.data.username.trim()
+    const password = parsed.data.password
 
-    const superUsername = process.env.SUPER_ADMIN_USERNAME
-    const superPassword = process.env.SUPER_ADMIN_PASSWORD
+    const superUsername = process.env.SUPER_ADMIN_USERNAME?.trim()
+    const superPassword = process.env.SUPER_ADMIN_PASSWORD?.trim()
 
-    if (superUsername && superPassword && username === superUsername) {
-      if (password !== superPassword) {
-        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
-      }
+    if (superUsername && superPassword && username === superUsername && password === superPassword) {
 
       const passwordHash = await hashPassword(superPassword)
       const superAdmin = await db.user.upsert({
