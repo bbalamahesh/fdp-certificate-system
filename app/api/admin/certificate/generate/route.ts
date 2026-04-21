@@ -70,7 +70,7 @@ export async function POST(req: Request) {
         const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl)
 
         /* ---------------- LOAD CONFIG + CONTENT ---------------- */
-        const layout = await getCertificateConfigForOrg()
+        const layout = await getCertificateConfigForOrg(safeEventId)
         const content = await getCertificateContentForEvent(safeEventId)
 
         /* ---------------- GENERATE PDF ---------------- */

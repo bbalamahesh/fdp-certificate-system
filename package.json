@@ -13,7 +13,8 @@
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "node prisma/seed.mjs"
+    "prisma:seed": "node prisma/seed.mjs",
+    "prisma:seed:demo": "node prisma/seed-demo.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

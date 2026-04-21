@@ -15,7 +15,8 @@ export async function GET(req: Request) {
         const certificate_id = searchParams.get('certificate_id')
         const download = searchParams.get('download') === '1'
 
-        const layout = await getCertificateConfigForOrg()
+        const configEventId = eventId || 'default-event'
+        const layout = await getCertificateConfigForOrg(configEventId)
 
         let content
         let certificateData: {
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
                 )
             }
 
-            content = await getCertificateContentForEvent('default-event')
+            content = await getCertificateContentForEvent(configEventId)
 
             const verificationUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/verify/PREVIEW-${certificate_id}`
 

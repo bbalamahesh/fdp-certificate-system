@@ -28,7 +28,6 @@ export default function AppNavbar() {
       const authLinks = [
         { href: '/admin/dashboard', label: 'Dashboard' },
         { href: '/admin/events/new', label: 'Create Event' },
-        { href: '/admin/certificate-settings', label: 'Certificate Settings' },
       ]
       return [...base, ...authLinks]
     }

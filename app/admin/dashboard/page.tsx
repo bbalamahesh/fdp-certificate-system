@@ -188,6 +188,15 @@ export default function AdminDashboard() {
                 >
                   View Participants
                 </Button>
+                <Link
+                  href={`/admin/certificate-settings?eventId=${event.id}&eventName=${encodeURIComponent(
+                    event.name
+                  )}`}
+                >
+                  <Button variant="outline" size="sm" className="mt-3 mr-2">
+                    Certificate Settings
+                  </Button>
+                </Link>
                 <Link href={`/admin/events/${event.id}/edit`}>
                   <Button variant="secondary" size="sm" className="mt-3 mr-2">
                     Edit Event

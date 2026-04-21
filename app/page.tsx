@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 
 type EventCard = {
   id: string
@@ -21,7 +22,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       try {
         const res = await fetch('/api/events')
         const data = await res.json()
@@ -70,17 +71,18 @@ export default function HomePage() {
                     className="h-44 w-full object-cover"
                   />
                 ) : null}
-                <CardHeader>
-                  <CardTitle className="line-clamp-2">{event.name}</CardTitle>
+                <CardHeader className='py-4'>
+                  <CardTitle className="line-clamp-2 uppercase">{event.name}</CardTitle>
+                  <Separator className="my-4" />
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <p><strong>Mode:</strong> {event.mode}</p>
-                  <p>
+                <CardContent className="space-y-3 text-sm gap-2 flex flex-col">
+                  <p className='!mt-0'><strong>Mode:</strong> {event.mode}</p>
+                  <p className='!mt-0'>
                     <strong>Dates:</strong> {new Date(event.fromDate).toLocaleDateString()} -{' '}
                     {new Date(event.toDate).toLocaleDateString()}
                   </p>
                   {event.organizerInstitute ? (
-                    <p><strong>Institute:</strong> {event.organizerInstitute}</p>
+                    <p className='!mt-0'><strong>Institute:</strong> {event.organizerInstitute}</p>
                   ) : null}
                   <Link href={`/events/${event.slug}`}>
                     <Button className="w-full">Register</Button>

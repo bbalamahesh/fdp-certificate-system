@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,11 +15,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Save, RotateCcw, Upload, Trash2, Palette } from 'lucide-react'
+import { Loader2, Save, RotateCcw, Upload, Trash2, Palette, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import CertificatePreviewFrame from '@/components/admin/CertificatePreviewFrame'
-
-const EVENT_ID = 'default-event'
 
 type Orientation = 'landscape' | 'portrait'
 
@@ -98,24 +97,24 @@ const BACKGROUND_TEMPLATE_OPTIONS: Array<{
   label: string
   thumb?: string
 }> = [
-  { value: 'none', label: 'No Background' },
-  {
-    value: 'classic',
-    label: 'Template Classic',
-    thumb: '/certificate-templates/template-classic.png',
-  },
-  {
-    value: 'blue',
-    label: 'Template Blue',
-    thumb: '/certificate-templates/template-blue.png',
-  },
-  {
-    value: 'minimal',
-    label: 'Template Minimal',
-    thumb: '/certificate-templates/template-minimal.png',
-  },
-  { value: 'custom', label: 'Custom Background' },
-]
+    { value: 'none', label: 'No Background' },
+    {
+      value: 'classic',
+      label: 'Template Classic',
+      thumb: '/certificate-templates/template-classic.png',
+    },
+    {
+      value: 'blue',
+      label: 'Template Blue',
+      thumb: '/certificate-templates/template-blue.png',
+    },
+    {
+      value: 'minimal',
+      label: 'Template Minimal',
+      thumb: '/certificate-templates/template-minimal.png',
+    },
+    { value: 'custom', label: 'Custom Background' },
+  ]
 
 async function fileToOptimizedDataUrl(
   file: File,
@@ -204,6 +203,8 @@ function StylePopover({
 }
 
 export default function CertificateSettingsPage() {
+  const [eventId, setEventId] = useState('')
+  const [eventName, setEventName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -233,12 +234,26 @@ export default function CertificateSettingsPage() {
     )
   }, [layout, content, savedLayout, savedContent])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const nextEventId = params.get('eventId') || ''
+    const nextEventName = params.get('eventName') || ''
+    setEventId(nextEventId)
+    setEventName(nextEventName)
+  }, [])
+
   const loadSettings = useCallback(async () => {
+    if (!eventId) {
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
       const [contentRes, layoutRes] = await Promise.all([
-        fetch(`/api/admin/certificate-settings?eventId=${EVENT_ID}`),
-        fetch('/api/admin/certificate-config'),
+        fetch(`/api/admin/events/${eventId}/certificate-content`),
+        fetch(`/api/admin/events/${eventId}/certificate-config`),
       ])
 
       const contentPayload = await contentRes.json()
@@ -247,15 +262,15 @@ export default function CertificateSettingsPage() {
       if (!contentRes.ok) {
         throw new Error(
           contentPayload?.details ||
-            contentPayload?.error ||
-            'Failed to load certificate content'
+          contentPayload?.error ||
+          'Failed to load certificate content'
         )
       }
       if (!layoutRes.ok) {
         throw new Error(
           layoutPayload?.details ||
-            layoutPayload?.error ||
-            'Failed to load certificate config'
+          layoutPayload?.error ||
+          'Failed to load certificate config'
         )
       }
 
@@ -282,7 +297,7 @@ export default function CertificateSettingsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [eventId])
 
   useEffect(() => {
     void loadSettings()
@@ -298,15 +313,12 @@ export default function CertificateSettingsPage() {
       setSaving(true)
       try {
         const [contentRes, layoutRes] = await Promise.all([
-          fetch('/api/admin/certificate-settings', {
+          fetch(`/api/admin/events/${eventId}/certificate-content`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventId: EVENT_ID,
-              data: content,
-            }),
+            body: JSON.stringify(content),
           }),
-          fetch('/api/admin/certificate-config', {
+          fetch(`/api/admin/events/${eventId}/certificate-config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(layout),
@@ -319,15 +331,15 @@ export default function CertificateSettingsPage() {
         if (!contentRes.ok) {
           throw new Error(
             contentPayload?.details ||
-              contentPayload?.error ||
-              'Failed to save certificate content'
+            contentPayload?.error ||
+            'Failed to save certificate content'
           )
         }
         if (!layoutRes.ok) {
           throw new Error(
             layoutPayload?.details ||
-              layoutPayload?.error ||
-              'Failed to save certificate config'
+            layoutPayload?.error ||
+            'Failed to save certificate config'
           )
         }
 
@@ -348,7 +360,7 @@ export default function CertificateSettingsPage() {
         setSaving(false)
       }
     },
-    [content, hasErrors, layout]
+    [content, eventId, hasErrors, layout]
   )
 
   useEffect(() => {
@@ -414,9 +426,9 @@ export default function CertificateSettingsPage() {
           ? 'logo'
           : key === 'customBackgroundUrl'
             ? 'background'
-          : key === 'coordinatorSignatureDataUrl'
-            ? 'coordinator-signature'
-            : 'hod-signature'
+            : key === 'coordinatorSignatureDataUrl'
+              ? 'coordinator-signature'
+              : 'hod-signature'
 
       const uploadRes = await fetch('/api/admin/certificate-asset', {
         method: 'POST',
@@ -447,13 +459,30 @@ export default function CertificateSettingsPage() {
     )
   }
 
+  if (!eventId) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Select an event first</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Open Certificate Settings from an event card in the dashboard.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-8 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Certificate Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Layout, content, optional branding, signatures, and style controls.
+            Layout, content, optional branding, signatures, and style controls for this event.
           </p>
         </div>
         <div className="text-xs text-muted-foreground">
@@ -465,6 +494,33 @@ export default function CertificateSettingsPage() {
                 ? 'Unsaved changes'
                 : 'All changes saved'}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+        <div className="text-sm">
+          <Link href="/admin/dashboard" className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline">
+            Dashboard
+          </Link>
+          <span className="mx-2 text-muted-foreground">/</span>
+          {eventId ? (
+            <Link
+              href={`/admin/events/${eventId}/edit`}
+              className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+            >
+              {eventName || 'Event'}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">{eventName || eventId || 'Event'}</span>
+          )}
+          <span className="mx-2 text-muted-foreground">/</span>
+          <span className="font-medium">Certificate Settings</span>
+        </div>
+        <Link href="/admin/dashboard">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -601,11 +657,10 @@ export default function CertificateSettingsPage() {
                             backgroundTemplate: template.value,
                           }))
                         }
-                        className={`overflow-hidden rounded-md border text-left transition ${
-                          active
-                            ? 'border-primary ring-2 ring-primary/30'
-                            : 'border-border hover:border-primary/50'
-                        }`}
+                        className={`overflow-hidden rounded-md border text-left transition ${active
+                          ? 'border-primary ring-2 ring-primary/30'
+                          : 'border-border hover:border-primary/50'
+                          }`}
                       >
                         {template.thumb ? (
                           <img
@@ -920,7 +975,7 @@ export default function CertificateSettingsPage() {
         <div className="space-y-3">
           <h2 className="text-lg font-medium">Live Certificate Preview</h2>
           <p className="text-sm text-muted-foreground">Auto-saves changes and refreshes preview.</p>
-          <CertificatePreviewFrame eventId={EVENT_ID} refreshKey={refreshKey} />
+          <CertificatePreviewFrame eventId={eventId} refreshKey={refreshKey} />
         </div>
       </div>
     </div>

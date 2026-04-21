@@ -29,7 +29,7 @@ export async function POST(req: Request) {
         const sheets = google.sheets({ version: 'v4', auth })
         const spreadsheetId = process.env.GOOGLE_SHEET_ID!
 
-        const layout = await getCertificateConfigForOrg()
+        const layout = await getCertificateConfigForOrg(eventId)
         const content = await getCertificateContentForEvent(eventId)
 
         const summary = {
